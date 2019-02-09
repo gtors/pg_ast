@@ -1,0 +1,30 @@
+use crate::ast::*;
+
+grammar;
+
+
+pub Alter: AlterNode = {
+    AlterCollation
+};
+
+
+Quote = r#"""#;
+
+
+Identifier = r"(?i)[a-z]\w+";
+
+
+Name: String = {
+    Quote <s: Identifier> Quote => s.to_string(),
+    <s: Identifier> => s.to_string()
+};
+
+
+Qualified: QualifiedName = {
+    <schema:(<Name> ".")?> <name:Name> => QualifiedName { schema: schema, name: name.to_string() }
+};
+
+
+AlterCollation: AlterNode = {
+   "ALTER COLLATION" <name:Qualified> "REFRESH VERSION" => AlterNode::AlterCollation(AlterCollationStmt { collation_name: name })
+};

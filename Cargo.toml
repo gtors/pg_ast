@@ -1,0 +1,13 @@
+[package]
+name = "pg_ast"
+version = "0.1.0"
+authors = ["gtors <gtors.potato@gmail.com>"]
+edition = "2018"
+
+[build-dependencies]
+lalrpop = "0.16.3"
+
+
+[dependencies]
+lalrpop-util = "0.16.3"
+regex = "0.2.1"
