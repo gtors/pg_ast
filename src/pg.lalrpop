@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::enums::*;
 
 grammar;
 
@@ -26,5 +27,27 @@ Qualified: QualifiedName = {
 
 
 AlterCollation: AlterNode = {
-   "ALTER COLLATION" <name:Qualified> "REFRESH VERSION" => AlterNode::AlterCollation(AlterCollationStmt { collation_name: name })
+   "ALTER" "COLLATION" <name:Qualified> "REFRESH" "VERSION" => AlterCollationStmt { collation_name: name }.into()
 };
+
+
+AlterObjectDepends: AlterNode = {
+    "ALTER" "INDEX" <index_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+        object_kind: ObjectKind::Index,
+        object: None,
+        relation: Some(index_name),
+        extension_name: ext_name,
+    }.into(),
+    "ALTER" "MATERIALIZED" "VIEW" <view_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+        object_kind: ObjectKind::MatView,
+        object: None,
+        relation: Some(view_name),
+        extension_name: ext_name,
+    }.into(),
+    "ALTER" "TRIGGER" <trig_name:Name> "ON" <table_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+        object_kind: ObjectKind::Trigger,
+        object: Some(QualifiedName { schema: None, name: trig_name.into() }.into()),
+        relation: Some(table_name),
+        extension_name: ext_name,
+    }.into(),
+}
