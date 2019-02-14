@@ -11,17 +11,19 @@ macro_rules! impl_from {
     };
 }
 
-pub enum AlterNode {
+pub enum Stmt {
     AlterCollation(AlterCollationStmt),
     AlterObjectDepends(AlterObjectDependsStmt),
 }
-macro_rules! an_impl_from {
+
+macro_rules! stmt_impl_from {
     ($kind:ident, $struct_:ident) => {
-        impl_from!(AlterNode, $kind, $struct_);
+        impl_from!(Stmt, $kind, $struct_);
     };
 }
-an_impl_from!(AlterCollation, AlterCollationStmt);
-an_impl_from!(AlterObjectDepends, AlterObjectDependsStmt);
+stmt_impl_from!(AlterCollation, AlterCollationStmt);
+stmt_impl_from!(AlterObjectDepends, AlterObjectDependsStmt);
+
 
 pub enum AlterObject {
     QualifiedName(QualifiedName),
@@ -32,6 +34,7 @@ macro_rules! ao_impl_from {
     };
 }
 ao_impl_from!(QualifiedName, QualifiedName);
+
 
 #[derive(Debug)]
 pub struct QualifiedName {

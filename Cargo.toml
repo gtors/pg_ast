@@ -2,11 +2,18 @@
 name = "pg_ast"
 version = "0.1.0"
 authors = ["gtors <gtors.potato@gmail.com>"]
+description = "SQL (PostgresSQL syntax) parser into AST"
+repository = "https://github.com/gtors/pg_ast"
+documentation = "https://docs.rs/pg_ast"
+readme = "README.md"
+keywords = ["sql", "parser", "postgresql", "postgres"]
+categories = ["parser-implementations"]
+license = "Apache-2.0/MIT"
 edition = "2018"
+build = "build.rs"
 
 [build-dependencies]
 lalrpop = "0.16.3"
-
 
 [dependencies]
 lalrpop-util = "0.16.3"

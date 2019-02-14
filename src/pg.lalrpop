@@ -1,18 +1,19 @@
-use crate::ast::*;
+use crate::ast;
 use crate::enums::*;
 
 grammar;
 
 
-pub Alter: AlterNode = {
-    AlterCollation
+pub Stmt: ast::Stmt = {
+    AlterCollation,
+    AlterObjectDepends
 };
 
 
 Quote = r#"""#;
 
 
-Identifier = r"(?i)[a-z]\w+";
+Identifier = r"(?i)[_a-z]\w*";
 
 
 Name: String = {
@@ -21,33 +22,37 @@ Name: String = {
 };
 
 
-Qualified: QualifiedName = {
-    <schema:(<Name> ".")?> <name:Name> => QualifiedName { schema: schema, name: name.to_string() }
+Qualified: ast::QualifiedName = {
+    <schema:(<Name> ".")?> <name:Name> => ast::QualifiedName { schema: schema, name: name.to_string() }
 };
 
 
-AlterCollation: AlterNode = {
-   "ALTER" "COLLATION" <name:Qualified> "REFRESH" "VERSION" => AlterCollationStmt { collation_name: name }.into()
+AlterCollation: ast::Stmt = {
+   "ALTER" "COLLATION" <name:Qualified> "REFRESH" "VERSION" => ast::AlterCollationStmt {
+        collation_name: name
+    }.into()
 };
 
 
-AlterObjectDepends: AlterNode = {
-    "ALTER" "INDEX" <index_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+AlterObjectDepends: ast::Stmt = {
+    "ALTER" "INDEX" <index_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
         object_kind: ObjectKind::Index,
         object: None,
         relation: Some(index_name),
         extension_name: ext_name,
     }.into(),
-    "ALTER" "MATERIALIZED" "VIEW" <view_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+
+    "ALTER" "MATERIALIZED" "VIEW" <view_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
         object_kind: ObjectKind::MatView,
         object: None,
         relation: Some(view_name),
         extension_name: ext_name,
     }.into(),
-    "ALTER" "TRIGGER" <trig_name:Name> "ON" <table_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => AlterObjectDependsStmt {
+
+    "ALTER" "TRIGGER" <trig_name:Name> "ON" <table_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
         object_kind: ObjectKind::Trigger,
-        object: Some(QualifiedName { schema: None, name: trig_name.into() }.into()),
+        object: Some(ast::QualifiedName { schema: None, name: trig_name.into() }.into()),
         relation: Some(table_name),
         extension_name: ext_name,
     }.into(),
-}
+};
