@@ -54,3 +54,17 @@ pub enum ObjectKind {
     UserMapping,
     View,
 }
+
+
+pub enum ParamMode {
+    /// Input only
+    In,
+    /// Output only
+    Out,
+    /// Both
+    InOut
+    /// Variadic (always input)
+    Variadic,
+    /// Table function output column
+    Table
+}

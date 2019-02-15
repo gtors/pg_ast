@@ -1,58 +1,348 @@
 use crate::ast;
 use crate::enums::*;
 
+#[inline]
+fn pg_catalog(s: &str) -> ast::QualName {
+    ast::QualName::from_str2("pg_catalog", s)
+}
+
+#[inline]
+fn pg_type(s: &str) -> ast::TypeName {
+   pg_catalog(s).into()
+}
+
+
 grammar;
 
 
 pub Stmt: ast::Stmt = {
     AlterCollation,
-    AlterObjectDepends
+    AlterObjDepends
 };
 
 
 Quote = r#"""#;
 
 
-Identifier = r"(?i)[_a-z]\w*";
+Iconst: i64 = {
+    <s:r"\d+"> => s.parse()
+}
+
+
+OptIconst = ("(" <Iconst> ")")?;
+
+
+Identifier: String = {
+    <ident:r"(?i)[_a-z]\w*"> => ident.to_string()
+}
 
 
 Name: String = {
-    Quote <s: Identifier> Quote => s.to_string(),
-    <s: Identifier> => s.to_string()
+    Quote <s: Identifier> Quote => s,
+    <s: Identifier> => s
 };
 
 
-Qualified: ast::QualifiedName = {
-    <schema:(<Name> ".")?> <name:Name> => ast::QualifiedName { schema: schema, name: name.to_string() }
+Qual: ast::QualName = {
+    <schema:(<Name> ".")?> <name:Name> => ast::QualName { schema: schema, name: name }
 };
 
 
 AlterCollation: ast::Stmt = {
-   "ALTER" "COLLATION" <name:Qualified> "REFRESH" "VERSION" => ast::AlterCollationStmt {
+   "ALTER" "COLLATION" <name:Qual> "REFRESH" "VERSION" => ast::AlterCollationStmt {
         collation_name: name
     }.into()
 };
 
 
-AlterObjectDepends: ast::Stmt = {
-    "ALTER" "INDEX" <index_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
-        object_kind: ObjectKind::Index,
+ColId = Identifier;
+
+
+// Column label --- allowed labels in "AS" clauses.
+// This presently includes *all* Postgres keywords.
+ColLabel = Identifier;
+
+
+AttrName = ColLabel;
+
+Attrs = ("." <AttrName>)+;
+
+
+IndirectionEl: ast::Indirection = {
+    ".*" => ast::Indirection::Star,
+    "." <attr:AttrName> => ast::Indirection::Str(attr),
+    "[" <idx:A_Expr> "]" => ast::Indirection::Index(idx),
+    "[" <l:A_Expr>? ":" <r:A_Expr>? "]" = ast::Indirection::Slice(l,r) 
+};
+
+Indirection: Vec<ast::Indirection> = {
+    <el:IndirectionEl> => s,
+    <Indirection> <el:IndirectionEl> =>
+};
+
+
+ColumnRef: = {
+    <col:ColId> => col
+    ColId indirect =>
+};
+
+Expr: => {
+}
+
+// General expressions
+// This is the heart of the expression syntax.
+//
+// We have two expression types: A_Expr is the unrestricted kind, and
+// B_Expr is a subset that must be used in some places to avoid shift/reduce
+// conflicts.  For example, we can't do BETWEEN as "BETWEEN a_expr AND a_expr"
+// because that use of AND conflicts with AND as a boolean operator.  So,
+// B_expr is used in BETWEEN and we remove boolean keywords from b_expr.
+//
+// Note that '(' A_expr ')' is a B_expr, so an unrestricted expression can
+// always be used by surrounding it with parens.
+//
+// C_expr is all the productions that are common to a_expr and b_expr;
+// it's factored out just to eliminate redundant coding.
+//
+// Be careful of productions involving more than one terminal token.
+// By default, bison will assign such productions the precedence of their
+// last terminal, but in nearly all cases you want it to be the precedence
+// of the first terminal instead; otherwise you will not get the behavior
+// you expect!
+A_Expr: ast::Expr = {
+    <expr:A_Expr> "TYPECAST" <ty:TypeName> => ast::TypeCast { 
+        expr: expr,
+        type_name: ty
+    }
+};
+
+C_Expr: => {
+    <cref:columnref> => cref,
+
+}
+
+// ============================================================================  
+// Type syntax
+// ============================================================================  
+
+
+ArrayBounds: Vec<ast::ArrayBounds> {
+    <b:ArrayBound0+> => b
+};
+
+
+ArrayBounds0: ast::ArrayBounds {
+    "[" "]" => ast::ArrayBounds::Unbounded,
+    "[" <i:Iconst> "]" => ast::ArrayBounds::Bounded(i)
+};
+
+
+TypeModifers: = {
+    "(" <expr:Expr> ")" => 
+}
+
+
+TypeName: ast::TypeName = {
+    <set:"SETOF"?> <ty:SimpleType> <ab:ArrayBounds>? => {
+        ty.array_bounds = ab;
+        ty.is_set = set.is_some();
+        ty
+    },
+    <set:"SETOF"?> <ty:SimpleType> "ARRAY" "[" <i:Iconst> "]" => {
+        ty.array_bounds = Some(vec![ast::ArrayBounds::Bounded(i)]);
+        ty.is_set = set.is_some();
+        ty
+    },
+    <set:"SETOF"?> <ty:SimpleType> "ARRAY" => {
+        ty.array_bounds = Some(vec![ast::ArrayBounds::Unbounded]);
+        ty.is_set = set.is_some();
+        ty
+    },
+};
+
+
+GenericType: ast::TypeName = {
+    <name:Identifier> <attrs:Attrs?> <mods:TypeModifers?> => {
+        // TODO: attrs mods
+        let mut ty = ast::TypeName {
+            name: ast::QualName(name: name, ..ast::QualName()::default()),
+            ..ast::TypeName::default()
+        };
+    }
+};
+
+Numeric: ast::TypeName = {
+    ("INT" | "INTEGER") => pg_type("int4"),
+    "SMALLINT" => pg_type("int2"),
+    "BIGINT" => pg_type("int8"),
+    "REAL" =>  pg_type("float4"),
+    "FLOAT" => pg_type("float8"), 
+    "FLOAT" "(" <i:Iconst> ")" => {
+        # TODO <1 >53
+        let prec = (if i <= 24 {4} else {8});
+        pg_catalog(format!("float{}", prec)).into()
+    }, 
+    "DOUBLE" "PRECISION" => pg_type("float8"),
+    "DECIMAL" opt_type_modifiers => pg_type("numeric"),
+    "DEC" opt_type_modifiers => pg_type("numeric"),
+    "NUMERIC" opt_type_modifiers => pg_type("numeric"),
+    "BOOLEAN" => pg_type("bool"),
+};
+
+
+// SQL bit-field data types
+// The following implement s BIT() and BIT VARYING()
+Bit: ast::TypeName = {
+    "BIT" <v:"VARYING"?> <expr:("(" <Expr> ")")?> => {
+        let ty_name = if v.is_some() {"varbit"} else {"bit"};
+        let mut ty: ast::TypeName = pg_catalog(ty_name);
+        // ty.typemods = expr;
+        ty
+    },
+};
+
+
+// SQL character data types
+// The following implements CHAR() and VARCHAR()
+Character: ast::TypeName = {
+    <ty_name:CharacterName> <i:("(" <i:Iconst> ")")?> => {
+        let mut ty: ast::TypeName = pg_type(ty_name);
+        // ty.typemods = ???
+        ty
+    },
+};
+
+
+CharacterName: &str => {
+    "NATIONAL"? "CHARACTER" <v:"VARYING"?> => if v.is_some() {"varchar"} else {"bpchar"},
+    "NATIONAL"? "CHAR" <v:"VARYING"?> => if v.is_some() {"varchar"} else {"bpchar"},
+    "NCHAR" <v:"VARYING"?> => if v.is_some() {"varchar"} else {"bpchar"},
+    "VARCHAR" => "varchar",
+}
+
+
+// SQL date/time types
+
+ConstDateTime: ast::TypeName = {
+    "TIMESTAMP" <i:("(" <Iconst> ")")?> <tz:TimeZone?> => {
+        let ty_name = if tz.unwrap_or(false) {"timestamptz"} else {"timestamp"};
+        let mut ty = pg_type(ty_name);
+        // if let Some() i.is_some() {
+        //     ty.typemods = i.unwrap()
+        // }
+        ty
+    },
+    "TIME" <i:("(" <Iconst> ")")?> <tz:TimeZone?> => {
+        let ty_name = if tz.unwrap_or(false) {"timetz"} else {"time"};
+        let mut ty = pg_type(ty_name);
+        // if let Some() i.is_some() {
+        //     ty.typemods = i.unwrap()
+        // }
+        ty
+    },
+};
+
+
+TimeZone: bool = {
+    "WITH" "TIME" "ZONE" => true,
+    "WITHOUT" "TIME" "ZONE" => false
+}
+
+
+ConstInterval: ast::TypeName = {
+    "INTERVAL" => pg_type("interval")
+};
+
+Interval: = {
+    "YEAR" =>,
+    "MONTH" =>,
+    "DAY" =>,
+    "HOUR" =>,
+    "MINUTE" =>,
+    "SECOND" <i:OptIconst> =>,
+    "YEAR" "TO" "MONTH" =>,
+    "DAY" "TO" "HOUR" =>,
+    "DAY" "TO" "MINUTE" =>,
+    "DAY" "TO" "SECOND" <i:OptIconst> =>,
+    "HOUR" "TO" "MINUTE" =>,
+    "HOUR" "TO" "SECOND" <i:OptIconst> =>,
+    "MINUTE" "TO" "SECOND" <i:OptIconst> =>,
+
+}
+
+
+SimpleType: ast::TypeName = {
+    GenericType => ast::TypeName { ... },
+    <ty:Numeric> => ty,
+    <ty:Bit> => ty,
+    <ty:Character => ty,
+    <ty:ConstDateTime> => ty,
+    <ty:ConstInterval> Interval => ty,
+    <ty:ConstInterval> "(" Iconst ")" => {
+        // ty.typemods = ...
+        ty
+    },
+};
+
+
+ArgMode = {
+    "IN" => ParamMode::In,
+    "OUT" => ParamMode::Out,
+    "IN" "OUT" => ParamMode::InOut,
+    "VARIADIC" => ParamMode::Variadic,
+};
+
+
+FuncType: {
+    ""
+};
+
+
+FuncArg: ast::FuncParam = {
+    <mode:ArgMode>? <name:Identifier>? <ty:FuncType> => ast::FuncParam {
+        name: name,
+        mode: mode.unwrap_or(ParamMode::In),
+    }
+};
+
+FuncArgs: Option<Vec<ast::FuncParam>> = { 
+    "(" <args:(<FuncArg> ",")*> ")" => args 
+};
+
+FuncWithArgs: ast::ObjWithArgs = {
+    <name:QualName> <args: FuncArgs>? => ast::ObjWithArgs {
+        name: name,
+        args: args
+    }
+};
+
+
+AlterObjDepends: ast::Stmt = {
+    "ALTER" "INDEX" <index_name:Qual> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjDependsStmt {
+        object_kind: ObjKind::Index,
         object: None,
         relation: Some(index_name),
         extension_name: ext_name,
     }.into(),
 
-    "ALTER" "MATERIALIZED" "VIEW" <view_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
-        object_kind: ObjectKind::MatView,
+    "ALTER" "MATERIALIZED" "VIEW" <view_name:Qual> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjDependsStmt {
+        object_kind: ObjKind::MatView,
         object: None,
         relation: Some(view_name),
         extension_name: ext_name,
     }.into(),
 
-    "ALTER" "TRIGGER" <trig_name:Name> "ON" <table_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
-        object_kind: ObjectKind::Trigger,
-        object: Some(ast::QualifiedName { schema: None, name: trig_name.into() }.into()),
+    "ALTER" "TRIGGER" <trig_name:Name> "ON" <table_name:Qual> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjDependsStmt {
+        object_kind: ObjKind::Trigger,
+        object: Some(ast::QualName { schema: None, name: trig_name.into() }.into()),
         relation: Some(table_name),
         extension_name: ext_name,
     }.into(),
+
+    "ALTER" "PROCEDURE" <func:FuncWithArgs> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjDependsStmt {
+        object_kind: ObjKind::Procedure,
+        object: Some(func.into()),
+        relation: None,
+        extension_name: ext_name,
+    },
 };
