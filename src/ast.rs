@@ -14,6 +14,7 @@ macro_rules! impl_from {
 pub enum Stmt {
     AlterCollation(AlterCollationStmt),
     AlterObjectDepends(AlterObjectDependsStmt),
+    AlterObjectSchema(AlterObjectSchemaStmt),
 }
 
 macro_rules! stmt_impl_from {
@@ -23,6 +24,7 @@ macro_rules! stmt_impl_from {
 }
 stmt_impl_from!(AlterCollation, AlterCollationStmt);
 stmt_impl_from!(AlterObjectDepends, AlterObjectDependsStmt);
+stmt_impl_from!(AlterObjectSchema, AlterObjectSchemaStmt);
 
 
 pub enum AlterObject {
@@ -55,4 +57,16 @@ pub struct AlterObjectDependsStmt {
     pub object: Option<AlterObject>,
     /// extension name
     pub extension_name: String,
+}
+
+
+pub struct AlterObjectSchemaStmt {
+    /// OBJECT_FUNCTION, OBJECT_TRIGGER, etc
+    pub object_kind: ObjectKind,
+    /// name of the object
+    pub object: String,
+    /// the new schema
+    pub new_schema: String,
+    /// IF EXISTS present in statement
+    pub if_exists: bool
 }

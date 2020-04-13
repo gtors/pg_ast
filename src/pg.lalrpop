@@ -1,3 +1,5 @@
+// vim: ts=4 sw=4 et
+
 use crate::ast;
 use crate::enums::*;
 
@@ -6,7 +8,8 @@ grammar;
 
 pub Stmt: ast::Stmt = {
     AlterCollation,
-    AlterObjectDepends
+    AlterObjectDepends,
+    AlterObjectSchema,
 };
 
 
@@ -43,7 +46,7 @@ AlterObjectDepends: ast::Stmt = {
     }.into(),
 
     "ALTER" "MATERIALIZED" "VIEW" <view_name:Qualified> "DEPENDS" "ON" "EXTENSION" <ext_name:Name> => ast::AlterObjectDependsStmt {
-        object_kind: ObjectKind::MatView,
+        object_kind: ObjectKind::MaterialView,
         object: None,
         relation: Some(view_name),
         extension_name: ext_name,
@@ -56,3 +59,198 @@ AlterObjectDepends: ast::Stmt = {
         extension_name: ext_name,
     }.into(),
 };
+
+
+AlterObjectSchema: ast::Stmt = {
+    "ALTER" "COLLATION" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Collation,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "CONVERSION" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Conversion,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "DOMAIN" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Domain,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "EXTENSION" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Extension,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "FUNCTION" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Function,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "OPERATOR" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Operator,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "OPERATOR" "CLASS" <name:Name> "USING" <index_method:Identifier> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        // object_kind: ObjectKind::OperatorClass(index_method=index_method),
+        object_kind: ObjectKind::OperatorClass,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "OPERATOR" "FAMILY" <name:Name> "USING" <index_method:Identifier> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::OperatorFamily,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "PROCEDURE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Procedure,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "ROUTINE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Routine,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "TABLE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Table,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+//    "ALTER" "TABLE" "IF" "EXISTS" relation_expr SET SCHEMA <schema:Name>
+//  {
+//      AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
+//      n->objectType = ObjectKind::TABLE;
+//      n->relation = $5;
+//      n->newschema = $8;
+//      n->missing_ok = true;
+//      $$ = (Node *)n;
+//  }.into(),
+
+    "ALTER" "STATISTICS" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Statistics,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "TEXT" "SEARCH" "PARSER" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::TextSearchParser,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "TEXT" "SEARCH" "DICTIONARY" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::TextSearchDictionary,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "TEXT" "SEARCH" "TEMPLATE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::TextSearchTemplate,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "TEXT" "SEARCH" "CONFIGURATION" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::TextSerachConfiguration,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "SEQUENCE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Sequence,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "SEQUENCE" "IF" "EXISTS" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Sequence,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: true,
+    }.into(),
+
+    "ALTER" "VIEW" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::View,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "VIEW" "IF" "EXISTS" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::View,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: true,
+    }.into(),
+
+    "ALTER" "MATERIALIZED" "VIEW" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::MaterialView,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+
+    "ALTER" "MATERIALIZED" "VIEW" "IF" "EXISTS" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::MaterialView,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: true,
+    }.into(),
+
+//    "ALTER" "FOREIGN TABLE" relation_expr SET SCHEMA <schema:Name>
+//  {
+//      AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
+//      n->objectType = ObjectKind::FOREIGN_TABLE;
+//      n->relation = $4;
+//      n->newschema = $7;
+//      n->missing_ok = false;
+//      $$ = (Node *)n;
+//  }.into(),
+//
+//    "ALTER" "FOREIGN TABLE" "IF" "EXISTS" relation_expr SET SCHEMA <schema:Name>
+//  {
+//      AlterObjectSchemaStmt *n = makeNode(AlterObjectSchemaStmt);
+//      n->objectType = ObjectKind::FOREIGN_TABLE;
+//      n->relation = $6;
+//      n->newschema = $9;
+//      n->missing_ok = true;
+//      $$ = (Node *)n;
+//  }.into(),
+
+    "ALTER" "TYPE" <name:Name> "SET" "SCHEMA" <schema:Name> => ast::AlterObjectSchemaStmt {
+        object_kind: ObjectKind::Type,
+        object: name.to_string(),
+        new_schema: schema.to_string(),
+        if_exists: false,
+    }.into(),
+}
