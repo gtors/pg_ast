@@ -13,8 +13,8 @@ edition = "2018"
 build = "build.rs"
 
 [build-dependencies]
-lalrpop = "0.16.3"
+lalrpop = {version="^0.18", features=["lexer"]}
 
 [dependencies]
-lalrpop-util = "0.16.3"
-regex = "0.2.1"
+lalrpop-util = "^0.18"
+regex = "^1.3"
